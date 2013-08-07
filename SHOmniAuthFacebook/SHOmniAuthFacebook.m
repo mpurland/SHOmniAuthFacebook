@@ -14,14 +14,13 @@
 #import <Social/Social.h>
 #import <FacebookSDK/FacebookSDK.h>
 
-
-
-
+NSString * const SHOmniAuthFacebookErrorDomain = @"SHOmniAuthFacebookErrorDomain";
 
 #define NSNullIfNil(v) (v ? v : [NSNull null])
 
-
 @interface SHOmniAuthFacebook ()
++ (NSArray *)permissionList;
+
 +(void)updateAccount:(ACAccount *)theAccount withCompleteBlock:(SHOmniAuthAccountResponseHandler)completeBlock;
 +(void)performLoginForNewAccount:(SHOmniAuthAccountResponseHandler)completionBlock;
 +(NSMutableDictionary *)authHashWithResponse:(NSDictionary *)theResponse;
@@ -30,96 +29,99 @@
 
 @implementation SHOmniAuthFacebook
 
++ (NSArray *)permissionList
+{
+    NSString * permission = [SHOmniAuth providerValue:SHOmniAuthProviderValueScope forProvider:self.provider];
+    NSArray  * permissionList = nil;
+    if(permission.length > 0)
+    {
+        permissionList = [permission componentsSeparatedByString:@","];
+    } else {
+        permissionList = @[@"email"];
+    }
+    return permissionList;
+}
 
-+(void)performLoginWithListOfAccounts:(SHOmniAuthAccountsListHandler)accountPickerBlock
-                           onComplete:(SHOmniAuthAccountResponseHandler)completionBlock; {
++ (void)performLoginWithListOfAccounts:(SHOmniAuthAccountsListHandler)accountPickerBlock
+                           onComplete:(SHOmniAuthAccountResponseHandler)completionBlock {
 
-
-
-
-  NSString * permission = [SHOmniAuth providerValue:SHOmniAuthProviderValueScope forProvider:self.provider];
-  NSArray  * permissionList = nil;
-  if(permission.length > 0)
-    permissionList = [permission componentsSeparatedByString:@","];
-  else
-    permissionList = @[@"email"];
-  NSDictionary * options = @{ACFacebookAppIdKey : [SHOmniAuth providerValue:SHOmniAuthProviderValueKey forProvider:self.provider],
-                             ACFacebookPermissionsKey : permissionList,
-                             ACFacebookAudienceKey : ACFacebookAudienceEveryone
-                             };
-
-  ACAccountStore * accountStore = [[ACAccountStore alloc] init];
-  ACAccountType  * accountType = [accountStore accountTypeWithAccountTypeIdentifier:self.accountTypeIdentifier];
-  [accountStore requestAccessToAccountsWithType:accountType options:options completion:^(BOOL granted, NSError *error) {
-
-    dispatch_async(dispatch_get_main_queue(), ^{
-      accountPickerBlock([accountStore accountsWithAccountType:accountType],
-                         ^(id<account> theChosenAccount) {
-        ACAccount * account = (ACAccount *)theChosenAccount;
-        if(theChosenAccount == nil) [self performLoginForNewAccount:completionBlock];
-        else [SHOmniAuthFacebook updateAccount:(ACAccount *)account withCompleteBlock:completionBlock];
-      });
-    });
-
-  }];
+    NSDictionary * options = @{ACFacebookAppIdKey : [SHOmniAuth providerValue:SHOmniAuthProviderValueKey forProvider:self.provider],
+                               ACFacebookPermissionsKey : [self permissionList],
+                               ACFacebookAudienceKey : ACFacebookAudienceEveryone
+                               };
+    
+    ACAccountStore * accountStore = [[ACAccountStore alloc] init];
+    ACAccountType  * accountType = [accountStore accountTypeWithAccountTypeIdentifier:self.accountTypeIdentifier];
+    [accountStore requestAccessToAccountsWithType:accountType options:options completion:^(BOOL granted, NSError *error) {
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            accountPickerBlock([accountStore accountsWithAccountType:accountType],
+                               ^(id<account> theChosenAccount) {
+                                   ACAccount * account = (ACAccount *)theChosenAccount;
+                                   if(theChosenAccount == nil) [self performLoginForNewAccount:completionBlock];
+                                   else [SHOmniAuthFacebook updateAccount:(ACAccount *)account withCompleteBlock:completionBlock];
+                               });
+        });
+        
+    }];
 }
 
 
-+(BOOL)hasLocalAccountOnDevice; {
-  ACAccountStore * store = [[ACAccountStore alloc] init];
-  ACAccountType  * type  = [store accountTypeWithAccountTypeIdentifier:self.accountTypeIdentifier];
-  return [store accountsWithAccountType:type].count > 0;
++(BOOL)hasLocalAccountOnDevice {
+    ACAccountStore * store = [[ACAccountStore alloc] init];
+    ACAccountType  * type  = [store accountTypeWithAccountTypeIdentifier:self.accountTypeIdentifier];
+    return [store accountsWithAccountType:type].count > 0;
 }
 
-+(BOOL)handlesOpenUrl:(NSURL *)theUrl; {
-  return [FBSession.activeSession handleOpenURL:theUrl];
++(BOOL)handlesOpenUrl:(NSURL *)theUrl {
+    return [FBSession.activeSession handleOpenURL:theUrl];
 }
 
-+(NSString *)provider; {
-  return ACAccountTypeIdentifierFacebook;
++(NSString *)provider {
+    return ACAccountTypeIdentifierFacebook;
 }
 
-+(NSString *)accountTypeIdentifier; {
-  return ACAccountTypeIdentifierFacebook;
++(NSString *)accountTypeIdentifier {
+    return ACAccountTypeIdentifierFacebook;
 }
 
-+(NSString *)serviceType; {
-  return SLServiceTypeFacebook;
++(NSString *)serviceType {
+    return SLServiceTypeFacebook;
 }
 
-+(NSString *)description; {
-  return NSStringFromClass(self.class);
++(NSString *)description {
+    return NSStringFromClass(self.class);
 }
 
-+(void)performLoginForNewAccount:(SHOmniAuthAccountResponseHandler)completionBlock;{
-
-  [FBSession openActiveSessionWithReadPermissions:@[@"email"]
-                                     allowLoginUI:YES
-                                completionHandler:^(FBSession *session, FBSessionState status, NSError *error) {
-
-                                  if (status == FBSessionStateClosed || status == FBSessionStateClosedLoginFailed || error )
-                                    completionBlock(nil, nil, error, NO);
-                                  else {
-                                    [[FBRequest requestForMe] startWithCompletionHandler:^(FBRequestConnection *connection, id result, NSError *error) {
-                                      if(error)
-                                        completionBlock(nil, nil, error, NO);
++ (void)performLoginForNewAccount:(SHOmniAuthAccountResponseHandler)completionBlock
+{
+    [FBSession openActiveSessionWithReadPermissions:[self permissionList]
+                                       allowLoginUI:YES
+                                  completionHandler:^(FBSession *session, FBSessionState status, NSError *error) {
+                                      
+                                      if (status == FBSessionStateClosed || status == FBSessionStateClosedLoginFailed || error )
+                                          completionBlock(nil, nil, error, NO);
                                       else {
-                                        [result setObject:session.accessTokenData.accessToken forKey:@"token"];
-                                        completionBlock(nil,[SHOmniAuthFacebook authHashWithResponse:result],error,YES);
+                                          [[FBRequest requestForMe] startWithCompletionHandler:^(FBRequestConnection *connection, id result, NSError *error) {
+                                              if(error)
+                                              {
+                                                  completionBlock(nil, nil, error, NO);
+                                              } else {
+                                                  [result setObject:session.accessTokenData.accessToken forKey:@"token"];
+                                                  ACAccountStore * accountStore = [[ACAccountStore alloc] init];
+                                                  ACAccountType  * accountType  = [accountStore accountTypeWithAccountTypeIdentifier:self.accountTypeIdentifier];
+                                                  completionBlock(nil,[SHOmniAuthFacebook authHashWithResponse:result],error,YES);
+                                              }
+
+                                          }];
+                                          
                                       }
-
-                                    }];
-
-                                  }
-
-                                }];
-
-
-
+                                      
+                                  }];
 }
 
 //Refactor this fucking monster
-+(void)updateAccount:(ACAccount *)theAccount withCompleteBlock:(SHOmniAuthAccountResponseHandler)completeBlock; {
++ (void)updateAccount:(ACAccount *)theAccount withCompleteBlock:(SHOmniAuthAccountResponseHandler)completeBlock {
   ACAccountStore * accountStore = [[ACAccountStore alloc] init];
   ACAccountType  * accountType  = [accountStore accountTypeWithAccountTypeIdentifier:self.accountTypeIdentifier];
 
@@ -127,7 +129,7 @@
   [accountStore.accounts enumerateObjectsUsingBlock:^(ACAccount * obj, NSUInteger _, BOOL *stop) {
     if([obj.username isEqualToString:theAccount.username]) {
       account = obj;
-      stop = YES;
+      *stop = YES;
     }
   }];
     [accountStore renewCredentialsForAccount:account completion:^(ACAccountCredentialRenewResult renewResult, NSError *error) {
@@ -135,29 +137,55 @@
 
               [accountStore saveAccount:account withCompletionHandler:^(BOOL success, NSError *error) {
                 if(([error.domain isEqualToString:ACErrorDomain] && error.code ==ACErrorAccountAlreadyExists) || success || error == nil) {
-                  SLRequest * request = [SLRequest requestForServiceType:self.serviceType
-                                                           requestMethod:SLRequestMethodGET
-                                                                     URL:[NSURL URLWithString:@"https://graph.facebook.com/me/"]
-                                                              parameters:nil];
-                  request.account = account;
-                  [request performRequestWithHandler:^(NSData *responseData, NSHTTPURLResponse *urlResponse, NSError *error) {
+                    NSDictionary * options = @{ACFacebookAppIdKey : [SHOmniAuth providerValue:SHOmniAuthProviderValueKey forProvider:self.provider],
+                                               ACFacebookPermissionsKey : [self permissionList],
+                                               ACFacebookAudienceKey : ACFacebookAudienceEveryone
+                                               };
 
-                    if(error) completeBlock(((id<account>)account), nil, error, NO);
-                    else {
-                      NSMutableDictionary * authHash = [[NSJSONSerialization
-                                                        JSONObjectWithData:responseData
-                                                        options:NSJSONReadingAllowFragments
-                                                        error:nil] mutableCopy];
-                      authHash[@"token"] = account.credential.oauthToken;
-                      completeBlock(((id<account>)account),
-                                    [self authHashWithResponse:authHash],
-                                    error, NO);
-                    }
-                  }];
+                    [accountStore requestAccessToAccountsWithType:accountType options:options completion:^(BOOL granted, NSError *error) {
+                        if (granted == YES)
+                        {
+                            NSArray *arrayOfAccounts = [accountStore accountsWithAccountType:accountType];
 
+                            if([arrayOfAccounts count] > 0)
+                            {
+                                account = [arrayOfAccounts lastObject];
+                            }
+                        }
+                        SLRequest * request = [SLRequest requestForServiceType:self.serviceType
+                                                                 requestMethod:SLRequestMethodGET
+                                                                           URL:[NSURL URLWithString:@"https://graph.facebook.com/me/"]
+                                                                    parameters:nil];
+                        request.account = account;
+                        [request performRequestWithHandler:^(NSData *responseData, NSHTTPURLResponse *urlResponse, NSError *error) {
+                            if(error)
+                            {
+                                completeBlock(((id<account>)account), nil, error, NO);
+                            } else {
+                                NSMutableDictionary * authHash = [[NSJSONSerialization
+                                                                   JSONObjectWithData:responseData
+                                                                   options:NSJSONReadingAllowFragments
+                                                                   error:nil] mutableCopy];
+                                NSDictionary *authError = authHash[@"error"];
+                                if(nil != authError)
+                                {
+                                    NSError *responseError = nil;
+                                    NSInteger code = [authError[@"code"] integerValue];
+                                    NSString *message = authError[@"message"];
+                                    responseError = [NSError errorWithDomain:SHOmniAuthFacebookErrorDomain code:code userInfo:@{NSLocalizedDescriptionKey : NSNullIfNil(message)}];
+                                    completeBlock((id<account>)theAccount, nil, responseError, NO);
+                                } else {
+                                    authHash[@"token"] = account.credential.oauthToken;
+                                    completeBlock(((id<account>)account),
+                                                  [self authHashWithResponse:authHash],
+                                                  error, YES);
+                                }
+                            }
+                        }];
+                    }];
+                } else {
+                    completeBlock(((id<account>)account), nil, error, success);
                 }
-                else
-                completeBlock(((id<account>)account), nil, error, success);
               }];
 
             }
@@ -168,7 +196,7 @@
 
 }
 
-+(NSMutableDictionary *)authHashWithResponse:(NSDictionary *)theResponse; {
++(NSMutableDictionary *)authHashWithResponse:(NSDictionary *)theResponse {
   NSString * name      = theResponse[@"name"];
   NSArray  * names     = [name componentsSeparatedByString:@" "];
   NSString * firstName = theResponse[@"first_name"];
