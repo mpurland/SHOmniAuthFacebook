@@ -45,8 +45,11 @@ NSString * const SHOmniAuthFacebookErrorDomain = @"SHOmniAuthFacebookErrorDomain
 + (void)performLoginWithListOfAccounts:(SHOmniAuthAccountsListHandler)accountPickerBlock
                            onComplete:(SHOmniAuthAccountResponseHandler)completionBlock {
 
-    NSDictionary * options = @{ACFacebookAppIdKey : [SHOmniAuth providerValue:SHOmniAuthProviderValueKey forProvider:self.provider],
-                               ACFacebookPermissionsKey : [self permissionList],
+    NSString *facebookAppId = [SHOmniAuth providerValue:SHOmniAuthProviderValueKey forProvider:self.provider] ?: @"";
+    NSArray *permissions = [self permissionList] ?: @[@"email"];
+    
+    NSDictionary * options = @{ACFacebookAppIdKey : facebookAppId,
+                               ACFacebookPermissionsKey : permissions,
                                ACFacebookAudienceKey : ACFacebookAudienceEveryone
                                };
     
